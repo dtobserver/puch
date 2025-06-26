@@ -1,0 +1,40 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:puch}",
+            "name": "Debug Puch",
+            "program": "${workspaceFolder:puch}/.build/debug/Puch",
+            "preLaunchTask": "swift: Build Debug Puch"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:puch}",
+            "name": "Release Puch",
+            "program": "${workspaceFolder:puch}/.build/release/Puch",
+            "preLaunchTask": "swift: Build Release Puch"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:puch}",
+            "name": "Debug Puch",
+            "program": "${workspaceFolder:puch}/.build/debug/Puch",
+            "preLaunchTask": "swift: Build Debug Puch"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:puch}",
+            "name": "Release Puch",
+            "program": "${workspaceFolder:puch}/.build/release/Puch",
+            "preLaunchTask": "swift: Build Release Puch"
+        }
+    ]
+}

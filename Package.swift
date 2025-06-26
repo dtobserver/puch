@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "ScreenCaptureApp",
+    name: "Puch",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "ScreenCaptureApp", targets: ["App"])
+        .executable(name: "Puch", targets: ["App"])
     ],
     targets: [
         .executableTarget(
