@@ -12,6 +12,12 @@ protocol ScreenCaptureManagerDelegate: AnyObject {
 }
 
 @MainActor
+enum ScreenshotMode {
+    case fullScreen
+    case window
+    case area
+}
+
 class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate {
     weak var delegate: ScreenCaptureManagerDelegate?
 
@@ -101,18 +107,42 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
         }
     }
 
-    func takeScreenshot() {
+    func takeScreenshot(mode: ScreenshotMode = .fullScreen) {
         if #available(macOS 15.2, *) {
             Task { @MainActor in
                 do {
-                    // Use the full screen rect for capture
-                    let screenRect = CGRect(x: 0, y: 0, width: CGDisplayPixelsWide(CGMainDisplayID()), height: CGDisplayPixelsHigh(CGMainDisplayID()))
-                    let image = try await SCScreenshotManager.captureImage(in: screenRect)
                     let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
-                    let bitmap = NSBitmapImageRep(cgImage: image)
-                    if let data = bitmap.representation(using: .png, properties: [:]) {
-                        try data.write(to: url)
-                        self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                    switch mode {
+                    case .fullScreen:
+                        let screenRect = CGRect(x: 0, y: 0, width: CGDisplayPixelsWide(CGMainDisplayID()), height: CGDisplayPixelsHigh(CGMainDisplayID()))
+                        let image = try await SCScreenshotManager.captureImage(in: screenRect)
+                        let bitmap = NSBitmapImageRep(cgImage: image)
+                        if let data = bitmap.representation(using: .png, properties: [:]) {
+                            try data.write(to: url)
+                            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                        }
+                    case .area:
+                        let process = Process()
+                        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                        process.arguments = ["-s", "-x", url.path]
+                        try process.run()
+                        process.waitUntilExit()
+                        if process.terminationStatus == 0 {
+                            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                        } else {
+                            self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: Int(process.terminationStatus), userInfo: nil))
+                        }
+                    case .window:
+                        let process = Process()
+                        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                        process.arguments = ["-w", "-x", url.path]
+                        try process.run()
+                        process.waitUntilExit()
+                        if process.terminationStatus == 0 {
+                            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                        } else {
+                            self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: Int(process.terminationStatus), userInfo: nil))
+                        }
                     }
                 } catch {
                     self.delegate?.screenCaptureManager(self, didFail: error)
@@ -122,20 +152,24 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
             // Fallback for older macOS versions - use alternative screenshot method
             Task { @MainActor in
                 do {
-                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                    guard let display = content.displays.first else { return }
-                    
-                    let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-                    let configuration = SCStreamConfiguration()
-                    configuration.width = display.width
-                    configuration.height = display.height
-                    configuration.showsCursor = false
-                    configuration.capturesAudio = false
-                    
-                    let _ = SCStream(filter: filter, configuration: configuration, delegate: nil)
-                    // For older versions, we'd need to implement a different approach
-                    // This is a simplified placeholder - in practice you'd capture a single frame
-                    self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: -1, userInfo: [NSLocalizedDescriptionKey: "Screenshot not supported on this macOS version"]))
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                    switch mode {
+                    case .area:
+                        process.arguments = ["-s", "-x", url.path]
+                    case .window:
+                        process.arguments = ["-w", "-x", url.path]
+                    case .fullScreen:
+                        process.arguments = ["-x", url.path]
+                    }
+                    try process.run()
+                    process.waitUntilExit()
+                    if process.terminationStatus == 0 {
+                        self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                    } else {
+                        self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: Int(process.terminationStatus), userInfo: nil))
+                    }
                 } catch {
                     self.delegate?.screenCaptureManager(self, didFail: error)
                 }
