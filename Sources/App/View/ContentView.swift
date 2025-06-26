@@ -33,6 +33,16 @@ struct ContentView: View {
         .onAppear {
             viewModel.requestPermissions()
         }
+        .alert("Error", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { _ in viewModel.errorMessage = nil }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let message = viewModel.errorMessage {
+                Text(message)
+            }
+        }
         .alert("Permissions Denied", isPresented: .constant(!viewModel.permissionsGranted)) {
             Button("OK", role: .cancel) {}
         } message: {

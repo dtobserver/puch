@@ -29,7 +29,7 @@ This file breaks down the steps required to implement the application described 
 
 ## 5. System Integration and UX
 - [x] Request and handle Screen Recording and microphone permissions.
-- [ ] Provide status indicators and error messages.
+- [x] Provide status indicators and error messages.
 - [ ] Manage resources to avoid leaks (stop streams, release writers).
 
 ## 6. Future Enhancements (Post-MVP)
