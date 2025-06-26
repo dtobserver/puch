@@ -1,12 +1,13 @@
 import Foundation
 
-class PersistenceManager {
+@MainActor
+final class PersistenceManager: Sendable {
     static let shared = PersistenceManager()
     private init() {}
 
     private let defaults = UserDefaults.standard
 
-    struct Settings: Codable {
+    struct Settings: Codable, Sendable {
         var outputDirectory: URL
         var frameRate: Int
     }

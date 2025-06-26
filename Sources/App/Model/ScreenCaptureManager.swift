@@ -1,8 +1,9 @@
 import Foundation
-import AVFoundation
-import ScreenCaptureKit
+@preconcurrency import AVFoundation
+@preconcurrency import ScreenCaptureKit
 import CoreGraphics
 
+@MainActor
 protocol ScreenCaptureManagerDelegate: AnyObject {
     func screenCaptureManagerDidStartRecording(_ manager: ScreenCaptureManager)
     func screenCaptureManager(_ manager: ScreenCaptureManager, didFinishRecordingTo url: URL?)
@@ -10,6 +11,7 @@ protocol ScreenCaptureManagerDelegate: AnyObject {
     func screenCaptureManager(_ manager: ScreenCaptureManager, didFail error: Error)
 }
 
+@MainActor
 class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate {
     weak var delegate: ScreenCaptureManagerDelegate?
 
@@ -21,11 +23,11 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
     private let queue = DispatchQueue(label: "ScreenCaptureQueue")
 
     func startRecording(withAudio: Bool = false) {
-        Task {
+        Task { @MainActor in
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 guard let display = content.displays.first else { return }
-                let filter = SCContentFilter(display: display, excludingWindows: [], exceptingApplications: [])
+                let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
                 let configuration = SCStreamConfiguration()
                 configuration.width = display.width
                 configuration.height = display.height
@@ -59,84 +61,111 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
 
                 writer.startWriting()
                 writer.startSession(atSourceTime: .zero)
-                try stream.startCapture()
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.delegate?.screenCaptureManagerDidStartRecording(self)
-                }
+                try await stream.startCapture()
+                self.delegate?.screenCaptureManagerDidStartRecording(self)
             } catch {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.delegate?.screenCaptureManager(self, didFail: error)
-                }
+                self.delegate?.screenCaptureManager(self, didFail: error)
             }
         }
     }
 
-    func stopRecording() {
-        queue.async { [self] in
-            stream?.stopCapture { error in
-                if let error {
-                    self.delegate?.screenCaptureManager(self, didFail: error)
-                }
+    nonisolated func stopRecording() {
+        Task { @MainActor in
+            guard let stream = self.stream else { return }
+            
+            do {
+                try await stream.stopCapture()
                 self.videoInput?.markAsFinished()
                 self.audioInput?.markAsFinished()
-                self.writer?.finishWriting {
-                    let url = self.writer?.outputURL
-                    self.stream = nil
-                    self.writer = nil
-                    self.videoInput = nil
-                    self.audioInput = nil
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self else { return }
-                        self.delegate?.screenCaptureManager(self, didFinishRecordingTo: url)
+                
+                let writer = self.writer
+                await withCheckedContinuation { continuation in
+                    writer?.finishWriting {
+                        let url = writer?.outputURL
+                        Task { @MainActor in
+                            self.stream = nil
+                            self.writer = nil
+                            self.videoInput = nil
+                            self.audioInput = nil
+                            self.delegate?.screenCaptureManager(self, didFinishRecordingTo: url)
+                            continuation.resume()
+                        }
                     }
                 }
+            } catch {
+                self.delegate?.screenCaptureManager(self, didFail: error)
             }
+            
+            self.audioManager?.stopCapturing()
+            self.audioManager = nil
         }
-        audioManager?.stopCapturing()
-        audioManager = nil
     }
 
     func takeScreenshot() {
-        if #available(macOS 14, *) {
-            Task {
+        if #available(macOS 15.2, *) {
+            Task { @MainActor in
                 do {
-                    let manager = SCScreenshotManager()
-                    let image = try await manager.captureImage()
+                    // Use the full screen rect for capture
+                    let screenRect = CGRect(x: 0, y: 0, width: CGDisplayPixelsWide(CGMainDisplayID()), height: CGDisplayPixelsHigh(CGMainDisplayID()))
+                    let image = try await SCScreenshotManager.captureImage(in: screenRect)
                     let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
-                    if let bitmap = NSBitmapImageRep(cgImage: image), let data = bitmap.representation(using: .png, properties: [:]) {
+                    let bitmap = NSBitmapImageRep(cgImage: image)
+                    if let data = bitmap.representation(using: .png, properties: [:]) {
                         try data.write(to: url)
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self else { return }
-                            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
-                        }
+                        self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
                     }
                 } catch {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self else { return }
-                        self.delegate?.screenCaptureManager(self, didFail: error)
-                    }
+                    self.delegate?.screenCaptureManager(self, didFail: error)
+                }
+            }
+        } else {
+            // Fallback for older macOS versions - use alternative screenshot method
+            Task { @MainActor in
+                do {
+                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                    guard let display = content.displays.first else { return }
+                    
+                    let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+                    let configuration = SCStreamConfiguration()
+                    configuration.width = display.width
+                    configuration.height = display.height
+                    configuration.showsCursor = false
+                    configuration.capturesAudio = false
+                    
+                    let _ = SCStream(filter: filter, configuration: configuration, delegate: nil)
+                    // For older versions, we'd need to implement a different approach
+                    // This is a simplified placeholder - in practice you'd capture a single frame
+                    self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: -1, userInfo: [NSLocalizedDescriptionKey: "Screenshot not supported on this macOS version"]))
+                } catch {
+                    self.delegate?.screenCaptureManager(self, didFail: error)
                 }
             }
         }
     }
 
     // MARK: - SCStreamOutput
-    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
-        guard outputType == .screen, let input = videoInput, input.isReadyForMoreMediaData else { return }
-        input.append(sampleBuffer)
+    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
+        guard outputType == .screen else { return }
+        // Use unsafe sendable to avoid data race warnings for CMSampleBuffer
+        let buffer = sampleBuffer
+        Task { @MainActor in
+            guard let input = self.videoInput, input.isReadyForMoreMediaData else { return }
+            input.append(buffer)
+        }
     }
 
     // MARK: - AudioCaptureManagerDelegate
-    func audioCaptureManager(_ manager: AudioCaptureManager, didOutput sampleBuffer: CMSampleBuffer) {
-        guard let input = audioInput, input.isReadyForMoreMediaData else { return }
-        input.append(sampleBuffer)
+    nonisolated func audioCaptureManager(_ manager: AudioCaptureManager, didOutput sampleBuffer: CMSampleBuffer) {
+        // Use unsafe sendable to avoid data race warnings for CMSampleBuffer
+        let buffer = sampleBuffer
+        Task { @MainActor in
+            guard let input = self.audioInput, input.isReadyForMoreMediaData else { return }
+            input.append(buffer)
+        }
     }
 
-    func audioCaptureManager(_ manager: AudioCaptureManager, didFail error: Error) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+    nonisolated func audioCaptureManager(_ manager: AudioCaptureManager, didFail error: Error) {
+        Task { @MainActor in
             self.delegate?.screenCaptureManager(self, didFail: error)
         }
     }
