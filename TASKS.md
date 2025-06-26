@@ -14,7 +14,7 @@ This file breaks down the steps required to implement the application described 
   - Receive samples via `SCStreamOutput` and manage recording.
   - Integrate with `SCScreenshotManager` for screenshots (macOS 14+).
   - Save video using `AVAssetWriter`.
-- [ ] Implement optional `AudioCaptureManager` for microphone/system audio.
+- [x] Implement optional `AudioCaptureManager` for microphone/system audio.
 - [x] Create `PersistenceManager` for saving settings and output paths.
 
 ## 3. ViewModel Layer
@@ -28,7 +28,7 @@ This file breaks down the steps required to implement the application described 
 - [ ] Settings view for capture parameters.
 
 ## 5. System Integration and UX
-- [ ] Request and handle Screen Recording and microphone permissions.
+- [x] Request and handle Screen Recording and microphone permissions.
 - [ ] Provide status indicators and error messages.
 - [ ] Manage resources to avoid leaks (stop streams, release writers).
 
