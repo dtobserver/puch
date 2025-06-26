@@ -25,13 +25,16 @@ Successfully transformed Puch from a traditional window-based app to a modern **
 - **Proper Management**: Separate WindowGroups with IDs
 
 ### 4. **Enhanced UX**
+ - **Flexible Screenshots**: Capture full screen, selected window, or custom area
 
 #### Menu Bar Dropdown
 ```
 ┌─────────────────────┐
 │ 📹 Puch        ● Recording │
 ├─────────────────────┤
-│ 📷 Take Screenshot  ⌘⇧3 │
+│ 📷 Full Screenshot   ⌘⇧3 │
+│ 🪟 Window Screenshot │
+│ ➕ Area Screenshot   │
 │ ⏹️  Stop Recording   ⌘⇧5 │
 │ 🎤 Record Audio     ⚪️ │
 ├─────────────────────┤
@@ -124,7 +127,6 @@ The app now provides:
 
 Ready for:
 - **Custom Hotkeys**: Settings UI already prepared
-- **More Capture Types**: Area selection, window capture
 - **Cloud Integration**: Upload to services
 - **Automation**: Scheduled captures, workflows
-- **Advanced History**: Tags, search, organization 
+- **Advanced History**: Tags, search, organization

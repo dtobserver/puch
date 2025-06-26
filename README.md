@@ -10,11 +10,14 @@ A powerful, lightweight **menu bar** screen capture application for macOS with g
 - **Quick Access**: One-click access to all capture functions
 - **Non-intrusive**: Stays out of your way until needed
 
-### ⌨️ **Global Hotkeys** 
+### ⌨️ **Global Hotkeys**
 - **Screenshot**: `⌘⇧3` - Instant full screen capture
 - **Recording**: `⌘⇧5` - Toggle screen recording on/off
 - **System-wide**: Works from any app, no need to switch windows
 - **Native Feel**: follows macOS screenshot conventions
+
+### 🖼️ **Flexible Screenshots**
+- Capture the entire screen, a specific window, or a custom area
 
 ### 📹 **Advanced Recording**
 - **High-quality**: Full resolution screen recording

@@ -34,11 +34,29 @@ struct MenuBarView: View {
             Group {
                 MenuButton(
                     icon: "camera.fill",
-                    title: "Take Screenshot",
+                    title: "Full Screenshot",
                     shortcut: "⌘⇧3",
                     color: .green
                 ) {
                     viewModel.takeScreenshot()
+                }
+                .disabled(!viewModel.permissionsGranted)
+
+                MenuButton(
+                    icon: "macwindow.on.rectangle",
+                    title: "Window Screenshot",
+                    color: .green
+                ) {
+                    viewModel.takeScreenshot(mode: .window)
+                }
+                .disabled(!viewModel.permissionsGranted)
+
+                MenuButton(
+                    icon: "crop",
+                    title: "Area Screenshot",
+                    color: .green
+                ) {
+                    viewModel.takeScreenshot(mode: .area)
                 }
                 .disabled(!viewModel.permissionsGranted)
                 

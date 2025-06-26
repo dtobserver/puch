@@ -60,8 +60,8 @@ class AppViewModel: ObservableObject {
         screenManager.stopRecording()
     }
 
-    func takeScreenshot() {
-        screenManager.takeScreenshot()
+    func takeScreenshot(mode: ScreenshotMode = .fullScreen) {
+        screenManager.takeScreenshot(mode: mode)
     }
 
     func requestPermissions() {
