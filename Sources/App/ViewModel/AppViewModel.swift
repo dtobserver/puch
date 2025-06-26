@@ -7,6 +7,7 @@ class AppViewModel: ObservableObject {
     @Published var lastScreenshotURL: URL?
     @Published var permissionsGranted = false
     @Published var recordAudio = false
+    @Published var errorMessage: String?
 
     let screenManager = ScreenCaptureManager()
 
@@ -49,6 +50,7 @@ extension AppViewModel: ScreenCaptureManagerDelegate {
 
     func screenCaptureManager(_ manager: ScreenCaptureManager, didFail error: Error) {
         isRecording = false
+        errorMessage = error.localizedDescription
         print("ScreenCapture error: \(error)")
     }
 }
