@@ -5,6 +5,8 @@ class AppViewModel: ObservableObject {
     @Published var isRecording = false
     @Published var lastRecordingURL: URL?
     @Published var lastScreenshotURL: URL?
+    @Published var permissionsGranted = false
+    @Published var recordAudio = false
 
     let screenManager = ScreenCaptureManager()
 
@@ -13,7 +15,7 @@ class AppViewModel: ObservableObject {
     }
 
     func startRecording() {
-        screenManager.startRecording()
+        screenManager.startRecording(withAudio: recordAudio)
     }
 
     func stopRecording() {
@@ -22,6 +24,12 @@ class AppViewModel: ObservableObject {
 
     func takeScreenshot() {
         screenManager.takeScreenshot()
+    }
+
+    func requestPermissions() {
+        PermissionManager.requestPermissions { [weak self] granted in
+            self?.permissionsGranted = granted
+        }
     }
 }
 

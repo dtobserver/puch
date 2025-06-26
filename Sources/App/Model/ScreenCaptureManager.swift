@@ -10,15 +10,17 @@ protocol ScreenCaptureManagerDelegate: AnyObject {
     func screenCaptureManager(_ manager: ScreenCaptureManager, didFail error: Error)
 }
 
-class ScreenCaptureManager: NSObject, SCStreamOutput {
+class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate {
     weak var delegate: ScreenCaptureManagerDelegate?
 
     private var stream: SCStream?
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
+    private var audioInput: AVAssetWriterInput?
+    private var audioManager: AudioCaptureManager?
     private let queue = DispatchQueue(label: "ScreenCaptureQueue")
 
-    func startRecording() {
+    func startRecording(withAudio: Bool = false) {
         Task {
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -41,6 +43,19 @@ class ScreenCaptureManager: NSObject, SCStreamOutput {
                 writer.add(input)
                 self.writer = writer
                 self.videoInput = input
+
+                if withAudio {
+                    let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
+                    audioInput.expectsMediaDataInRealTime = true
+                    if writer.canAdd(audioInput) {
+                        writer.add(audioInput)
+                        self.audioInput = audioInput
+                        let audioManager = AudioCaptureManager()
+                        audioManager.delegate = self
+                        self.audioManager = audioManager
+                        audioManager.startCapturing()
+                    }
+                }
 
                 writer.startWriting()
                 writer.startSession(atSourceTime: .zero)
@@ -65,11 +80,13 @@ class ScreenCaptureManager: NSObject, SCStreamOutput {
                     self.delegate?.screenCaptureManager(self, didFail: error)
                 }
                 self.videoInput?.markAsFinished()
+                self.audioInput?.markAsFinished()
                 self.writer?.finishWriting {
                     let url = self.writer?.outputURL
                     self.stream = nil
                     self.writer = nil
                     self.videoInput = nil
+                    self.audioInput = nil
                     DispatchQueue.main.async { [weak self] in
                         guard let self else { return }
                         self.delegate?.screenCaptureManager(self, didFinishRecordingTo: url)
@@ -77,6 +94,8 @@ class ScreenCaptureManager: NSObject, SCStreamOutput {
                 }
             }
         }
+        audioManager?.stopCapturing()
+        audioManager = nil
     }
 
     func takeScreenshot() {
@@ -107,5 +126,18 @@ class ScreenCaptureManager: NSObject, SCStreamOutput {
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         guard outputType == .screen, let input = videoInput, input.isReadyForMoreMediaData else { return }
         input.append(sampleBuffer)
+    }
+
+    // MARK: - AudioCaptureManagerDelegate
+    func audioCaptureManager(_ manager: AudioCaptureManager, didOutput sampleBuffer: CMSampleBuffer) {
+        guard let input = audioInput, input.isReadyForMoreMediaData else { return }
+        input.append(sampleBuffer)
+    }
+
+    func audioCaptureManager(_ manager: AudioCaptureManager, didFail error: Error) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.delegate?.screenCaptureManager(self, didFail: error)
+        }
     }
 }

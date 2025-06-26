@@ -7,10 +7,12 @@ struct ContentView: View {
         VStack {
             Text(viewModel.isRecording ? "Recording..." : "Ready")
                 .padding()
+            Toggle("Record Audio", isOn: $viewModel.recordAudio)
+                .padding(.horizontal)
             HStack {
                 Button(action: viewModel.startRecording) {
                     Text("Start")
-                }.disabled(viewModel.isRecording)
+                }.disabled(viewModel.isRecording || !viewModel.permissionsGranted)
                 Button(action: viewModel.stopRecording) {
                     Text("Stop")
                 }.disabled(!viewModel.isRecording)
@@ -28,6 +30,14 @@ struct ContentView: View {
             }
         }
         .frame(width: 300, height: 220)
+        .onAppear {
+            viewModel.requestPermissions()
+        }
+        .alert("Permissions Denied", isPresented: .constant(!viewModel.permissionsGranted)) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please enable screen recording and microphone access in Settings.")
+        }
     }
 }
 
