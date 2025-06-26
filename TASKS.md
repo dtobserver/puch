@@ -4,22 +4,22 @@ This file breaks down the steps required to implement the application described 
 
 ## 1. Project Setup
 - [x] Create a new macOS app in Xcode using SwiftUI.
-- [ ] Configure entitlements for screen recording and microphone access.
+- [x] Configure entitlements for screen recording and microphone access.
 - [x] Establish the folder structure (`Model`, `ViewModel`, `View`).
 
 ## 2. Core Logic (Model Layer)
-- [ ] Implement `ScreenCaptureManager` to:
+- [x] Implement `ScreenCaptureManager` to:
   - Discover shareable content with `SCShareableContent`.
   - Configure `SCStream` and `SCContentFilter`.
   - Receive samples via `SCStreamOutput` and manage recording.
   - Integrate with `SCScreenshotManager` for screenshots (macOS 14+).
   - Save video using `AVAssetWriter`.
 - [ ] Implement optional `AudioCaptureManager` for microphone/system audio.
-- [ ] Create `PersistenceManager` for saving settings and output paths.
+- [x] Create `PersistenceManager` for saving settings and output paths.
 
 ## 3. ViewModel Layer
 - [x] Build `AppViewModel` exposing app state (`isRecording`, content lists).
-- [ ] Connect `ScreenCaptureManager` callbacks to update the view model.
+- [x] Connect `ScreenCaptureManager` callbacks to update the view model.
 
 ## 4. User Interface (View Layer)
 - [x] Main window with controls for recording and screenshots.
@@ -36,4 +36,3 @@ This file breaks down the steps required to implement the application described 
 - [ ] Basic video editing tools (trimming, cropping).
 - [ ] Live streaming functionality.
 - [ ] Customizable hotkeys for quick actions.
-

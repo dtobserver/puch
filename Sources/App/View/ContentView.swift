@@ -18,8 +18,16 @@ struct ContentView: View {
                     Text("Screenshot")
                 }
             }
+            if let shot = viewModel.lastScreenshotURL {
+                Text("Screenshot: \(shot.lastPathComponent)")
+                    .font(.footnote)
+            }
+            if let record = viewModel.lastRecordingURL {
+                Text("Recording: \(record.lastPathComponent)")
+                    .font(.footnote)
+            }
         }
-        .frame(width: 300, height: 200)
+        .frame(width: 300, height: 220)
     }
 }
 
