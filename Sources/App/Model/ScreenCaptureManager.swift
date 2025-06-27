@@ -2,6 +2,7 @@ import Foundation
 @preconcurrency import AVFoundation
 @preconcurrency import ScreenCaptureKit
 import CoreGraphics
+import AppKit
 
 @MainActor
 protocol ScreenCaptureManagerDelegate: AnyObject {
@@ -20,6 +21,8 @@ enum ScreenshotMode {
 
 class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate {
     weak var delegate: ScreenCaptureManagerDelegate?
+
+    var windowBackground: PersistenceManager.Settings.WindowScreenshotBackground = .desktop
 
     private var stream: SCStream?
     private var writer: AVAssetWriter?
@@ -135,11 +138,11 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                     case .window:
                         let process = Process()
                         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-                        process.arguments = ["-w", "-x", url.path]
+                        process.arguments = ["-w", "-x", "-o", url.path]
                         try process.run()
                         process.waitUntilExit()
                         if process.terminationStatus == 0 {
-                            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                            self.handleWindowBackground(at: url)
                         } else {
                             self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: Int(process.terminationStatus), userInfo: nil))
                         }
@@ -159,14 +162,18 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                     case .area:
                         process.arguments = ["-s", "-x", url.path]
                     case .window:
-                        process.arguments = ["-w", "-x", url.path]
+                        process.arguments = ["-w", "-x", "-o", url.path]
                     case .fullScreen:
                         process.arguments = ["-x", url.path]
                     }
                     try process.run()
                     process.waitUntilExit()
                     if process.terminationStatus == 0 {
-                        self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                        if mode == .window {
+                            self.handleWindowBackground(at: url)
+                        } else {
+                            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+                        }
                     } else {
                         self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: Int(process.terminationStatus), userInfo: nil))
                     }
@@ -175,6 +182,40 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                 }
             }
         }
+    }
+
+    private func handleWindowBackground(at url: URL) {
+        guard windowBackground != .desktop,
+              let image = NSImage(contentsOf: url) else {
+            self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+            return
+        }
+
+        let size = image.size
+        let newImage = NSImage(size: size)
+        newImage.lockFocus()
+
+        switch windowBackground {
+        case .white:
+            NSColor.white.setFill()
+            NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
+        case .gradient:
+            let gradient = NSGradient(colors: [NSColor(calibratedWhite: 0.95, alpha: 1.0), NSColor(calibratedWhite: 0.75, alpha: 1.0)])
+            gradient?.draw(in: NSRect(origin: .zero, size: size), angle: 90)
+        case .desktop:
+            break
+        }
+
+        image.draw(at: .zero, from: NSRect(origin: .zero, size: size), operation: .sourceOver, fraction: 1.0)
+        newImage.unlockFocus()
+
+        if let tiff = newImage.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiff),
+           let data = rep.representation(using: .png, properties: [:]) {
+            try? data.write(to: url)
+        }
+
+        self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
     }
 
     // MARK: - SCStreamOutput

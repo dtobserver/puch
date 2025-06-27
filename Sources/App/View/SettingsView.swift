@@ -56,6 +56,15 @@ struct GeneralSettingsView: View {
                 Toggle("Record Audio by Default", isOn: $viewModel.recordAudio)
                     .help("Enable audio recording for screen recordings")
             }
+
+            Section("Window Screenshot") {
+                Picker("Background", selection: $viewModel.windowScreenshotBackground) {
+                    Text("Desktop").tag(PersistenceManager.Settings.WindowScreenshotBackground.desktop)
+                    Text("White").tag(PersistenceManager.Settings.WindowScreenshotBackground.white)
+                    Text("Gradient").tag(PersistenceManager.Settings.WindowScreenshotBackground.gradient)
+                }
+                .pickerStyle(.segmented)
+            }
             
             Section("File Management") {
                 HStack {

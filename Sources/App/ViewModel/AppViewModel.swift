@@ -8,14 +8,26 @@ class AppViewModel: ObservableObject {
     @Published var lastScreenshotURL: URL?
     @Published var permissionsGranted = false
     @Published var recordAudio = false
+    @Published var windowScreenshotBackground: PersistenceManager.Settings.WindowScreenshotBackground = .desktop {
+        didSet {
+            persistenceSettings.windowScreenshotBackground = windowScreenshotBackground
+            PersistenceManager.shared.saveSettings(persistenceSettings)
+            screenManager.windowBackground = windowScreenshotBackground
+        }
+    }
     @Published var errorMessage: String?
 
     let screenManager: ScreenCaptureManager
     private var permissionMonitorTimer: Timer?
+    private var persistenceSettings: PersistenceManager.Settings
 
     init() {
         screenManager = ScreenCaptureManager()
         screenManager.delegate = self
+        let loaded = PersistenceManager.shared.loadSettings() ?? .default
+        persistenceSettings = loaded
+        windowScreenshotBackground = loaded.windowScreenshotBackground
+        screenManager.windowBackground = windowScreenshotBackground
         setupNotificationObservers()
         checkPermissionsStatus()
         startPermissionMonitoring()
