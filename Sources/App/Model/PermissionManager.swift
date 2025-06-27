@@ -3,35 +3,24 @@ import AVFoundation
 import CoreGraphics
 
 class PermissionManager {
-    static func requestPermissions(completion: @escaping @Sendable (Bool) -> Void) {
+    static func requestScreenRecordingPermission(completion: @escaping @Sendable (Bool) -> Void) {
         // Check screen recording permission first
         let screenGranted = CGPreflightScreenCaptureAccess()
         
         if screenGranted {
-            // Screen permission already granted, check audio
-            checkAudioPermission { audioGranted in
-                DispatchQueue.main.async {
-                    completion(audioGranted)
-                }
+            DispatchQueue.main.async {
+                completion(true)
             }
         } else {
             // Need to request screen permission
             let screenPermissionGranted = CGRequestScreenCaptureAccess()
-            if screenPermissionGranted {
-                checkAudioPermission { audioGranted in
-                    DispatchQueue.main.async {
-                        completion(audioGranted)
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    completion(false)
-                }
+            DispatchQueue.main.async {
+                completion(screenPermissionGranted)
             }
         }
     }
     
-    private static func checkAudioPermission(completion: @escaping @Sendable (Bool) -> Void) {
+    static func requestMicrophonePermission(completion: @escaping @Sendable (Bool) -> Void) {
         let audioStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         
         switch audioStatus {
@@ -48,6 +37,11 @@ class PermissionManager {
         @unknown default:
             completion(false)
         }
+    }
+    
+    // Legacy method for backwards compatibility - now only requests screen recording
+    static func requestPermissions(completion: @escaping @Sendable (Bool) -> Void) {
+        requestScreenRecordingPermission(completion: completion)
     }
     
     static func checkPermissionsStatus() -> (screen: Bool, audio: Bool) {
@@ -70,5 +64,9 @@ class PermissionManager {
     
     static func hasScreenRecordingPermission() -> Bool {
         return CGPreflightScreenCaptureAccess()
+    }
+    
+    static func hasMicrophonePermission() -> Bool {
+        return AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 }
