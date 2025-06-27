@@ -19,7 +19,8 @@ enum ScreenshotMode {
     case area
 }
 
-class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate {
+@MainActor
+class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate, @unchecked Sendable {
     weak var delegate: ScreenCaptureManagerDelegate?
 
     var windowBackground: PersistenceManager.Settings.WindowScreenshotBackground = .desktop
@@ -32,7 +33,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
     private let queue = DispatchQueue(label: "ScreenCaptureQueue")
 
     func startRecording(withAudio: Bool = false) {
-        Task { @MainActor in
+        Task {
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 guard let display = content.displays.first else { return }
@@ -78,14 +79,14 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
         }
     }
 
-    nonisolated func stopRecording() {
-        Task { @MainActor in
-            guard let stream = self.stream else { return }
-            
+    func stopRecording() {
+        guard let stream = self.stream else { return }
+        
+        Task {
             do {
                 try await stream.stopCapture()
-                self.videoInput?.markAsFinished()
-                self.audioInput?.markAsFinished()
+                videoInput?.markAsFinished()
+                audioInput?.markAsFinished()
                 
                 let writer = self.writer
                 await withCheckedContinuation { continuation in
@@ -112,7 +113,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
 
     func takeScreenshot(mode: ScreenshotMode = .fullScreen) {
         if #available(macOS 15.2, *) {
-            Task { @MainActor in
+            Task {
                 do {
                     let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
                     switch mode {
@@ -153,7 +154,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
             }
         } else {
             // Fallback for older macOS versions - use alternative screenshot method
-            Task { @MainActor in
+            Task {
                 do {
                     let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
                     let process = Process()
@@ -221,21 +222,19 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
     // MARK: - SCStreamOutput
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         guard outputType == .screen else { return }
-        // Use unsafe sendable to avoid data race warnings for CMSampleBuffer
-        let buffer = sampleBuffer
-        Task { @MainActor in
+        // CMSampleBuffer is thread-safe, so we can safely pass it across actor boundaries
+        Task { @MainActor [sampleBuffer] in
             guard let input = self.videoInput, input.isReadyForMoreMediaData else { return }
-            input.append(buffer)
+            input.append(sampleBuffer)
         }
     }
 
     // MARK: - AudioCaptureManagerDelegate
     nonisolated func audioCaptureManager(_ manager: AudioCaptureManager, didOutput sampleBuffer: CMSampleBuffer) {
-        // Use unsafe sendable to avoid data race warnings for CMSampleBuffer
-        let buffer = sampleBuffer
-        Task { @MainActor in
+        // CMSampleBuffer is thread-safe, so we can safely pass it across actor boundaries
+        Task { @MainActor [sampleBuffer] in
             guard let input = self.audioInput, input.isReadyForMoreMediaData else { return }
-            input.append(buffer)
+            input.append(sampleBuffer)
         }
     }
 

@@ -22,10 +22,10 @@ class AppViewModel: ObservableObject {
     private var persistenceSettings: PersistenceManager.Settings
 
     init() {
-        screenManager = ScreenCaptureManager()
-        screenManager.delegate = self
         let loaded = PersistenceManager.shared.loadSettings() ?? .default
         persistenceSettings = loaded
+        screenManager = ScreenCaptureManager()
+        screenManager.delegate = self
         windowScreenshotBackground = loaded.windowScreenshotBackground
         screenManager.windowBackground = windowScreenshotBackground
         setupNotificationObservers()
