@@ -4,7 +4,7 @@
 set -e
 
 APP_NAME="Puch"
-BUNDLE_ID="com.yourcompany.puch"
+BUNDLE_ID="com.thaodangspace.puch"
 BUILD_DIR="build"
 APP_PATH="$BUILD_DIR/$APP_NAME.app"
 DMG_NAME="$APP_NAME-1.0.dmg"

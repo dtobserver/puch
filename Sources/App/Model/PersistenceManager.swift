@@ -24,7 +24,7 @@ final class PersistenceManager: Sendable {
                 outputDirectory: FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory,
                 frameRate: 60,
                 windowScreenshotBackground: .wallpaper,
-                windowPadding: 15
+                windowPadding: 50
             )
         }
     }

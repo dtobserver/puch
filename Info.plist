@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>Puch</string>
     <key>CFBundleIdentifier</key>
-    <string>com.yourcompany.puch</string>
+    <string>com.thaodangspace.puch</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
