@@ -8,8 +8,23 @@ final class PersistenceManager: Sendable {
     private let defaults = UserDefaults.standard
 
     struct Settings: Codable, Sendable {
+        enum WindowScreenshotBackground: String, Codable, CaseIterable, Sendable {
+            case desktop
+            case white
+            case gradient
+        }
+
         var outputDirectory: URL
         var frameRate: Int
+        var windowScreenshotBackground: WindowScreenshotBackground
+
+        static var `default`: Settings {
+            Settings(
+                outputDirectory: FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory,
+                frameRate: 60,
+                windowScreenshotBackground: .desktop
+            )
+        }
     }
 
     func saveSettings(_ settings: Settings) {
