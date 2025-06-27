@@ -18,13 +18,15 @@ final class PersistenceManager: Sendable {
         var frameRate: Int
         var windowScreenshotBackground: WindowScreenshotBackground
         var windowPadding: Int
+        var screenshotScale: Double
 
         static var `default`: Settings {
             Settings(
                 outputDirectory: FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory,
                 frameRate: 60,
                 windowScreenshotBackground: .wallpaper,
-                windowPadding: 15
+                windowPadding: 50,
+                screenshotScale: 1.0
             )
         }
     }

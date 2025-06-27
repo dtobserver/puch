@@ -24,6 +24,8 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
     weak var delegate: ScreenCaptureManagerDelegate?
 
     var windowBackground: PersistenceManager.Settings.WindowScreenshotBackground = .wallpaper
+    var screenshotScale: CGFloat = 1.0
+    var outputDirectory: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
     private var stream: SCStream?
     private var writer: AVAssetWriter?
@@ -31,6 +33,30 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
     private var audioInput: AVAssetWriterInput?
     private var audioManager: AudioCaptureManager?
     private let queue = DispatchQueue(label: "ScreenCaptureQueue")
+
+    private func resizedImage(from image: NSImage) -> NSImage {
+        guard screenshotScale < 1.0 else { return image }
+        let newSize = NSSize(width: image.size.width * screenshotScale, height: image.size.height * screenshotScale)
+        let newImage = NSImage(size: newSize)
+        newImage.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(in: NSRect(origin: .zero, size: newSize),
+                   from: NSRect(origin: .zero, size: image.size),
+                   operation: .copy,
+                   fraction: 1.0)
+        newImage.unlockFocus()
+        return newImage
+    }
+
+    private func resizeImageAtURL(_ url: URL) {
+        guard screenshotScale < 1.0, let image = NSImage(contentsOf: url) else { return }
+        let scaled = resizedImage(from: image)
+        if let tiff = scaled.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiff),
+           let data = rep.representation(using: .png, properties: [:]) {
+            try? data.write(to: url)
+        }
+    }
 
     func startRecording(withAudio: Bool = false) {
         Task {
@@ -48,7 +74,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                 try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
                 self.stream = stream
 
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent("Recording_\(Date().timeIntervalSince1970).mov")
+                let url = outputDirectory.appendingPathComponent("Recording_\(Date().timeIntervalSince1970).mov")
                 let writer = try AVAssetWriter(url: url, fileType: .mov)
                 let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264])
                 input.expectsMediaDataInRealTime = true
@@ -115,13 +141,16 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
         if #available(macOS 15.2, *) {
             Task {
                 do {
-                    let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
+                    let url = outputDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
                     switch mode {
                     case .fullScreen:
                         let screenRect = CGRect(x: 0, y: 0, width: CGDisplayPixelsWide(CGMainDisplayID()), height: CGDisplayPixelsHigh(CGMainDisplayID()))
-                        let image = try await SCScreenshotManager.captureImage(in: screenRect)
-                        let bitmap = NSBitmapImageRep(cgImage: image)
-                        if let data = bitmap.representation(using: .png, properties: [:]) {
+                        let cgImage = try await SCScreenshotManager.captureImage(in: screenRect)
+                        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                        let finalImage = resizedImage(from: nsImage)
+                        if let tiff = finalImage.tiffRepresentation,
+                           let rep = NSBitmapImageRep(data: tiff),
+                           let data = rep.representation(using: .png, properties: [:]) {
                             try data.write(to: url)
                             self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
                         }
@@ -132,6 +161,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                         try process.run()
                         process.waitUntilExit()
                         if process.terminationStatus == 0 {
+                            resizeImageAtURL(url)
                             self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
                         } else {
                             self.delegate?.screenCaptureManager(self, didFail: NSError(domain: "ScreenCapture", code: Int(process.terminationStatus), userInfo: nil))
@@ -139,7 +169,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                     case .window:
                         let process = Process()
                         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-                        process.arguments = ["-w", "-x", "-o", url.path]
+                        process.arguments = ["-w", "-x", url.path]
                         try process.run()
                         process.waitUntilExit()
                         if process.terminationStatus == 0 {
@@ -156,14 +186,14 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
             // Fallback for older macOS versions - use alternative screenshot method
             Task {
                 do {
-                    let url = FileManager.default.temporaryDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
+                    let url = outputDirectory.appendingPathComponent("Screenshot_\(Date().timeIntervalSince1970).png")
                     let process = Process()
                     process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
                     switch mode {
                     case .area:
                         process.arguments = ["-s", "-x", url.path]
                     case .window:
-                        process.arguments = ["-w", "-x", "-o", url.path]
+                        process.arguments = ["-w", "-x", url.path]
                     case .fullScreen:
                         process.arguments = ["-x", url.path]
                     }
@@ -173,6 +203,7 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
                         if mode == .window {
                             self.handleWindowBackground(at: url)
                         } else {
+                            resizeImageAtURL(url)
                             self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
                         }
                     } else {
@@ -191,9 +222,9 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
             return
         }
 
-        // Get settings for padding
+        // Get settings for padding and increase it for more wallpaper visibility
         let settings = PersistenceManager.shared.loadSettings() ?? .default
-        let padding = CGFloat(settings.windowPadding)
+        let padding = CGFloat(settings.windowPadding * 5)
         
         // Calculate new size with padding
         let originalSize = image.size
@@ -252,7 +283,9 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
         
         newImage.unlockFocus()
 
-        if let tiff = newImage.tiffRepresentation,
+        let finalImage = resizedImage(from: newImage)
+
+        if let tiff = finalImage.tiffRepresentation,
            let rep = NSBitmapImageRep(data: tiff),
            let data = rep.representation(using: .png, properties: [:]) {
             try? data.write(to: url)

@@ -56,7 +56,7 @@ struct ContentView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Please enable screen recording and microphone access in System Settings to use this app.")
+            Text("Please enable screen recording access in System Settings to use this app. Microphone access will be requested only when you enable audio recording.")
         }
         .onChange(of: viewModel.isRecording) { isRecording in
             if isRecording {

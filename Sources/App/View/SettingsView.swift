@@ -4,13 +4,12 @@ struct SettingsView: View {
     @EnvironmentObject var viewModel: AppViewModel
     @State private var screenshotHotkey = "⌘⇧3"
     @State private var recordingHotkey = "⌘⇧5"
-    @State private var saveLocation = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
     @State private var showingFileImporter = false
     
     var body: some View {
         TabView {
             // General Settings Tab
-            GeneralSettingsView(viewModel: viewModel, saveLocation: $saveLocation, showingFileImporter: $showingFileImporter)
+            GeneralSettingsView(viewModel: viewModel, showingFileImporter: $showingFileImporter)
                 .tabItem {
                     Label("General", systemImage: "gearshape")
                 }
@@ -36,7 +35,7 @@ struct SettingsView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first {
-                    saveLocation = url
+                    viewModel.saveLocation = url
                 }
             case .failure(let error):
                 print("File selection error: \(error)")
@@ -47,14 +46,13 @@ struct SettingsView: View {
 
 struct GeneralSettingsView: View {
     @ObservedObject var viewModel: AppViewModel
-    @Binding var saveLocation: URL
     @Binding var showingFileImporter: Bool
     
     var body: some View {
         Form {
             Section("Recording") {
                 Toggle("Record Audio by Default", isOn: $viewModel.recordAudio)
-                    .help("Enable audio recording for screen recordings")
+                    .help("Enable audio recording for screen recordings. Microphone permission will be requested when this is enabled.")
             }
 
             Section("Window Screenshot") {
@@ -65,13 +63,23 @@ struct GeneralSettingsView: View {
                 }
                 .pickerStyle(.segmented)
             }
+
+            Section("Screenshot Size") {
+                Slider(value: $viewModel.screenshotScale, in: 0.25...1.0, step: 0.05) {
+                    Text("Scale")
+                } minimumValueLabel: {
+                    Text("25%")
+                } maximumValueLabel: {
+                    Text("100%")
+                }
+            }
             
             Section("File Management") {
                 HStack {
                     VStack(alignment: .leading) {
                         Text("Save Location")
                             .font(.headline)
-                        Text(saveLocation.path)
+                        Text(viewModel.saveLocation.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

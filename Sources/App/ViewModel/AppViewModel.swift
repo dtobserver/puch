@@ -7,7 +7,14 @@ class AppViewModel: ObservableObject {
     @Published var lastRecordingURL: URL?
     @Published var lastScreenshotURL: URL?
     @Published var permissionsGranted = false
-    @Published var recordAudio = false
+    @Published var recordAudio = false {
+        didSet {
+            // When user enables audio recording, check if we need to request microphone permission
+            if recordAudio && !PermissionManager.hasMicrophonePermission() {
+                requestMicrophonePermission()
+            }
+        }
+    }
     @Published var windowScreenshotBackground: PersistenceManager.Settings.WindowScreenshotBackground = .wallpaper {
         didSet {
             persistenceSettings.windowScreenshotBackground = windowScreenshotBackground
@@ -15,9 +22,25 @@ class AppViewModel: ObservableObject {
             screenManager.windowBackground = windowScreenshotBackground
         }
     }
+    @Published var screenshotScale: Double = 1.0 {
+        didSet {
+            persistenceSettings.screenshotScale = screenshotScale
+            PersistenceManager.shared.saveSettings(persistenceSettings)
+            screenManager.screenshotScale = CGFloat(screenshotScale)
+        }
+    }
+    @Published var saveLocation: URL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory {
+        didSet {
+            persistenceSettings.outputDirectory = saveLocation
+            PersistenceManager.shared.saveSettings(persistenceSettings)
+            screenManager.outputDirectory = saveLocation
+        }
+    }
+    }
     @Published var errorMessage: String?
 
     let screenManager: ScreenCaptureManager
+    let floatingBadgeManager: FloatingBadgeManager
     private var permissionMonitorTimer: Timer?
     private var persistenceSettings: PersistenceManager.Settings
 
@@ -25,9 +48,14 @@ class AppViewModel: ObservableObject {
         let loaded = PersistenceManager.shared.loadSettings() ?? .default
         persistenceSettings = loaded
         screenManager = ScreenCaptureManager()
+        floatingBadgeManager = FloatingBadgeManager()
         screenManager.delegate = self
         windowScreenshotBackground = loaded.windowScreenshotBackground
+        saveLocation = loaded.outputDirectory
         screenManager.windowBackground = windowScreenshotBackground
+        screenshotScale = loaded.screenshotScale
+        screenManager.screenshotScale = CGFloat(screenshotScale)
+        screenManager.outputDirectory = saveLocation
         setupNotificationObservers()
         checkPermissionsStatus()
         startPermissionMonitoring()
@@ -65,7 +93,20 @@ class AppViewModel: ObservableObject {
     }
 
     func startRecording() {
-        screenManager.startRecording(withAudio: recordAudio)
+        // Check if audio recording is enabled and we don't have microphone permission
+        if recordAudio && !PermissionManager.hasMicrophonePermission() {
+            requestMicrophonePermission { [weak self] granted in
+                Task { @MainActor in
+                    if granted {
+                        self?.screenManager.startRecording(withAudio: self?.recordAudio ?? false)
+                    } else {
+                        self?.errorMessage = "Microphone permission is required for audio recording. Please enable it in System Settings."
+                    }
+                }
+            }
+        } else {
+            screenManager.startRecording(withAudio: recordAudio)
+        }
     }
 
     func stopRecording() {
@@ -77,9 +118,24 @@ class AppViewModel: ObservableObject {
     }
 
     func requestPermissions() {
-        PermissionManager.requestPermissions { [weak self] granted in
+        PermissionManager.requestScreenRecordingPermission { [weak self] granted in
             Task { @MainActor in
                 self?.permissionsGranted = granted
+                if !granted {
+                    self?.errorMessage = "Screen recording permission is required. Please enable it in System Settings."
+                }
+            }
+        }
+    }
+    
+    private func requestMicrophonePermission(completion: (@Sendable (Bool) -> Void)? = nil) {
+        PermissionManager.requestMicrophonePermission { [weak self] granted in
+            Task { @MainActor in
+                if !granted {
+                    self?.recordAudio = false
+                    self?.errorMessage = "Microphone permission denied. Audio recording has been disabled."
+                }
+                completion?(granted)
             }
         }
     }
@@ -87,7 +143,7 @@ class AppViewModel: ObservableObject {
     private func checkPermissionsStatus() {
         let status = PermissionManager.checkPermissionsStatus()
         // For screen recording, we primarily need screen permission
-        // Audio permission is only required when recording with audio
+        // Audio permission is only checked when recording with audio
         permissionsGranted = status.screen
     }
     
@@ -113,6 +169,8 @@ extension AppViewModel: ScreenCaptureManagerDelegate {
 
     func screenCaptureManager(_ manager: ScreenCaptureManager, didTakeScreenshot url: URL) {
         lastScreenshotURL = url
+        // Show floating badge for the new screenshot
+        floatingBadgeManager.showBadge(for: url)
     }
 
     func screenCaptureManager(_ manager: ScreenCaptureManager, didFail error: Error) {
