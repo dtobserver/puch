@@ -23,7 +23,7 @@ enum ScreenshotMode {
 class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegate, @unchecked Sendable {
     weak var delegate: ScreenCaptureManagerDelegate?
 
-    var windowBackground: PersistenceManager.Settings.WindowScreenshotBackground = .desktop
+    var windowBackground: PersistenceManager.Settings.WindowScreenshotBackground = .wallpaper
 
     private var stream: SCStream?
     private var writer: AVAssetWriter?
@@ -186,28 +186,70 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
     }
 
     private func handleWindowBackground(at url: URL) {
-        guard windowBackground != .desktop,
-              let image = NSImage(contentsOf: url) else {
+        guard let image = NSImage(contentsOf: url) else {
             self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
             return
         }
 
-        let size = image.size
-        let newImage = NSImage(size: size)
+        // Get settings for padding
+        let settings = PersistenceManager.shared.loadSettings() ?? .default
+        let padding = CGFloat(settings.windowPadding)
+        
+        // Calculate new size with padding
+        let originalSize = image.size
+        let newSize = NSSize(width: originalSize.width + (padding * 2), 
+                            height: originalSize.height + (padding * 2))
+        
+        let newImage = NSImage(size: newSize)
         newImage.lockFocus()
 
         switch windowBackground {
         case .white:
             NSColor.white.setFill()
-            NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
+            NSBezierPath(rect: NSRect(origin: .zero, size: newSize)).fill()
         case .gradient:
             let gradient = NSGradient(colors: [NSColor(calibratedWhite: 0.95, alpha: 1.0), NSColor(calibratedWhite: 0.75, alpha: 1.0)])
-            gradient?.draw(in: NSRect(origin: .zero, size: size), angle: 90)
-        case .desktop:
-            break
+            gradient?.draw(in: NSRect(origin: .zero, size: newSize), angle: 90)
+        case .wallpaper:
+            // Get current wallpaper and draw it as background
+            if let wallpaperImage = getCurrentWallpaper() {
+                let wallpaperSize = wallpaperImage.size
+                let targetSize = newSize
+                
+                // Calculate scale to fill the target size while maintaining aspect ratio
+                let scaleX = targetSize.width / wallpaperSize.width
+                let scaleY = targetSize.height / wallpaperSize.height
+                let scale = max(scaleX, scaleY)
+                
+                let scaledWidth = wallpaperSize.width * scale
+                let scaledHeight = wallpaperSize.height * scale
+                
+                // Center the scaled wallpaper
+                let x = (targetSize.width - scaledWidth) / 2
+                let y = (targetSize.height - scaledHeight) / 2
+                
+                let sourceRect = NSRect(origin: .zero, size: wallpaperSize)
+                let destRect = NSRect(x: x, y: y, width: scaledWidth, height: scaledHeight)
+                
+                wallpaperImage.draw(in: destRect, 
+                                  from: sourceRect, 
+                                  operation: .copy, 
+                                  fraction: 1.0)
+            } else {
+                // Fallback to white background if wallpaper can't be loaded
+                NSColor.white.setFill()
+                NSBezierPath(rect: NSRect(origin: .zero, size: newSize)).fill()
+            }
         }
 
-        image.draw(at: .zero, from: NSRect(origin: .zero, size: size), operation: .sourceOver, fraction: 1.0)
+        // Draw the original window screenshot centered with padding
+        let imageRect = NSRect(x: padding, y: padding, 
+                              width: originalSize.width, height: originalSize.height)
+        image.draw(in: imageRect, 
+                  from: NSRect(origin: .zero, size: originalSize), 
+                  operation: .sourceOver, 
+                  fraction: 1.0)
+        
         newImage.unlockFocus()
 
         if let tiff = newImage.tiffRepresentation,
@@ -217,6 +259,28 @@ class ScreenCaptureManager: NSObject, SCStreamOutput, AudioCaptureManagerDelegat
         }
 
         self.delegate?.screenCaptureManager(self, didTakeScreenshot: url)
+    }
+    
+    private func getCurrentWallpaper() -> NSImage? {
+        guard let screen = NSScreen.main else { return nil }
+        
+        // First try the NSWorkspace approach
+        if let imageURL = NSWorkspace.shared.desktopImageURL(for: screen) {
+            if let wallpaperImage = NSImage(contentsOf: imageURL) {
+                return wallpaperImage
+            }
+        }
+        
+        // Fallback: Try to capture the actual desktop behind all windows
+        let screenRect = screen.frame
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? CGMainDisplayID()
+        
+        if let cgImage = CGDisplayCreateImage(displayID) {
+            let nsImage = NSImage(cgImage: cgImage, size: screenRect.size)
+            return nsImage
+        }
+        
+        return nil
     }
 
     // MARK: - SCStreamOutput

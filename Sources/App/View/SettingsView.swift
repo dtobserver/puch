@@ -59,7 +59,7 @@ struct GeneralSettingsView: View {
 
             Section("Window Screenshot") {
                 Picker("Background", selection: $viewModel.windowScreenshotBackground) {
-                    Text("Desktop").tag(PersistenceManager.Settings.WindowScreenshotBackground.desktop)
+                                            Text("Wallpaper").tag(PersistenceManager.Settings.WindowScreenshotBackground.wallpaper)
                     Text("White").tag(PersistenceManager.Settings.WindowScreenshotBackground.white)
                     Text("Gradient").tag(PersistenceManager.Settings.WindowScreenshotBackground.gradient)
                 }

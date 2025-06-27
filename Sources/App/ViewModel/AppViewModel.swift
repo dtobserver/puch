@@ -8,7 +8,7 @@ class AppViewModel: ObservableObject {
     @Published var lastScreenshotURL: URL?
     @Published var permissionsGranted = false
     @Published var recordAudio = false
-    @Published var windowScreenshotBackground: PersistenceManager.Settings.WindowScreenshotBackground = .desktop {
+    @Published var windowScreenshotBackground: PersistenceManager.Settings.WindowScreenshotBackground = .wallpaper {
         didSet {
             persistenceSettings.windowScreenshotBackground = windowScreenshotBackground
             PersistenceManager.shared.saveSettings(persistenceSettings)

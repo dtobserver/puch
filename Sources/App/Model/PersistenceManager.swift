@@ -9,7 +9,7 @@ final class PersistenceManager: Sendable {
 
     struct Settings: Codable, Sendable {
         enum WindowScreenshotBackground: String, Codable, CaseIterable, Sendable {
-            case desktop
+            case wallpaper
             case white
             case gradient
         }
@@ -17,12 +17,14 @@ final class PersistenceManager: Sendable {
         var outputDirectory: URL
         var frameRate: Int
         var windowScreenshotBackground: WindowScreenshotBackground
+        var windowPadding: Int
 
         static var `default`: Settings {
             Settings(
                 outputDirectory: FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory,
                 frameRate: 60,
-                windowScreenshotBackground: .desktop
+                windowScreenshotBackground: .wallpaper,
+                windowPadding: 15
             )
         }
     }
